@@ -38,8 +38,8 @@ C_64:			.float	64.0
 C_255:			.float	255
 
 # Display constants
-HUE_COEFF:		.float 1.5
-BRIGHT_COEFF:	.float	1.5
+HUE_COEFF:		.float .9
+BRIGHT_COEFF:	.float	.9
 
 # Height, Width of screen in pixels for Mandelbrot computation
 RESOLUTION:		.float	32.0
@@ -223,8 +223,9 @@ pick_color:
 	
 	# Pixel will be sepia
 	# Adjust K for an opposite hue
-	lwc1	$f22, TWO
-	sub.s	$f17, $f22, $f17		# K = 2 - K
+	lwc1	$f25, TWO
+	sub.s	$f17, $f25, $f17		# K = 2 - K
+	
 	# G and B both are composed of at least K^3, so compute that first
 	mul.s	$f21, $f17, $f17
 	mul.s	$f21, $f21, $f17		# temp = K^3
@@ -239,24 +240,24 @@ pick_color:
 blue:
 	# Pixel will be blue
 	# R and G both are composed of at least K^3, so compute that first
-	mul.s	$f22, $f17, $f17
-	mul.s	$f22, $f22, $f17		# temp = K^3
+	mul.s	$f25, $f17, $f17
+	mul.s	$f25, $f25, $f17		# temp = K^3
 	
 	# R = K^4
-	mul.s	$f19, $f22, $f17
+	mul.s	$f19, $f25, $f17
 	# G = sqrt(K^5)
-	mul.s	$f20, $f22, $f17
-	mul.s	$f20, $f22, $f17
+	mul.s	$f20, $f25, $f17
+	mul.s	$f20, $f25, $f17
 	sqrt.s	$f20, $f20
 	# B = K
 	mov.s	$f21, $f17
 draw_mandelbrot_pixel:
 	# We now have the RGB of our current pixel. However they are currently between 0 and 1
 	# We will scale by 255 to get our final value
-	lwc1	$f22, C_255				# f10 = 255
-	mul.s	$f19, $f19, $f22		# r *= 255
-	mul.s	$f20, $f20, $f22		# g *= 255
-	mul.s	$f21, $f21, $f22		# b *= 255
+	lwc1	$f25, C_255				# f10 = 255
+	mul.s	$f19, $f19, $f25		# r *= 255
+	mul.s	$f20, $f20, $f25		# g *= 255
+	mul.s	$f21, $f21, $f25		# b *= 255
 	
 	# Now we need to move everything back into the normal arithmetic registers so we can combine them into our overall color for this pixel
 	# Convert to ints
@@ -278,8 +279,16 @@ draw_mandelbrot_pixel:
 	or		$t4, $t4, $t6
 	or		$t4, $t4, $t7
 	
-	# At last, draw the pixel
+	# At last, draw the pixel (x, y)
 	draw_pixel ($t0, $t1, $t4)
+	
+	# If Y_OFFSET is 0, the graph will be symmetric about Y = 0, so draw (x, RESOLUTION - y)
+	c.eq.s	$f28, $f30
+	bc1f	main_loop_increment
+	
+	addi	$t2, $zero, RESOLUTION_INT
+	sub		$t2, $t2, $t1
+	draw_pixel ($t0, $t2, $t4)
 main_loop_increment:
 	add.s	$f10, $f10, $f29	# x++
 	addi	$t0, $t0, 1
@@ -290,7 +299,17 @@ main_loop_increment:
 	li		$t0, 0
 	add.s	$f11, $f11, $f29	# y++
 	addi	$t1, $t1, 1
+
+	# If Y_OFFSET == 0, the set is symmetric about y = 0, so y goes from 0 to RESOLUTION / 2
+	c.eq.s	$f28, $f30
+	bc1t	half_resolution
+	
 	c.lt.s	$f11, $f0
+	bc1t	main_loop
+	
+half_resolution:
+	add.s	$f25, $f11, $f11
+	c.le.s	$f25, $f0
 	bc1t	main_loop
 	
 	# Rendering takes a while, so we want to let the user know when it's done
@@ -322,6 +341,7 @@ skip_flip:
 	lw $t0, 0xffff0000  	#t1 holds if input available
     beq $t0, 0, input_loop	#If no input, keep displaying
     
+    lwc1	$f24, TWO
     lwc1	$f25, C_8
     lwc1	$f26, C_ZOOM_SCALE
     
@@ -336,6 +356,11 @@ skip_flip:
 	# Zoom
 	beq	$s2, 122, zoom_in	# input z
 	beq	$s2, 120, zoom_out
+	# Color
+	beq	$s2, 111, hue_up
+	beq $s2, 108, hue_down
+	beq	$s2, 105, bright_up
+	beq	$s2, 107, bright_down
 	# invalid input, ignore
 	j	input_loop
 	
@@ -357,18 +382,41 @@ right:
 	add.s	$f27, $f27, $f25
 	j save
 zoom_in:
-	# X_MIN, X_MAX *= .75
+	# X_MIN, X_MAX *= ZOOM_SCALE
 	mul.s	$f1, $f1, $f26
 	mul.s	$f2, $f2, $f26
+	# ZOOM_SCALE /= 2
+	div.s	$f26, $f26, $f24
 	j save
 zoom_out:
-	# X_MIN, X_MAX /= .75
+	# ZOOM_SCALE *= 2
+	mul.s	$f26, $f26, $f24
+	# X_MIN, X_MAX /= ZOOM_SCALE
 	div.s	$f1, $f1, $f26
 	div.s	$f2, $f2, $f26
+	j save
+hue_up:
+	# HUE_COEFF *= 2
+	mul.s	$f8, $f8, $f24
+	j save
+hue_down:
+	# HUE_COEFF /= 2
+	div.s	$f8, $f8, $f24
+	j save
+bright_down:
+	# BRIGHT_COEFF *= 2
+	mul.s	$f9, $f9, $f24
+	j save
+bright_up:
+	# BRIGHT_COEFF /= 2
+	div.s	$f9, $f9, $f24
 	j save
 save:
 	swc1	$f1, X_MIN
 	swc1	$f2, X_MAX
+	swc1	$f8, HUE_COEFF
+	swc1	$f9, BRIGHT_COEFF
+	swc1	$f26, C_ZOOM_SCALE
 	swc1	$f27, X_OFFSET
 	swc1	$f28, Y_OFFSET
 	j main
