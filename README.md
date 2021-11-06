@@ -1,6 +1,8 @@
 # MIPSelbrot
 An interactive mandelbrot fractal viewer written in MIPS
 
+## Screenshots
+
 ![Preview](preview.png)
 
 ## Setup
@@ -27,3 +29,12 @@ The viewer supports the following features via the keyboard
 | Exit | "space" |
 
 Input is accepted between renders. When a render is complete, the top left pixel will flash black and white.
+
+## How does it work?
+
+## Flowchart
+
+## Known Issues
+- Zooming does not always put you where you wanted to go, you may end up stuck in a long render loop at the center of the fractal
+- Toggling the music on causes a slowdown of around 2 orders of magnitude. Asynchronous MIDI cannot be used due to a bug in Mars audio rendering
+- Too many hue or brightness shifts in either direction (more than 10) could be irreversible as the hue and brightness coefficients approach and eventually reach 0
