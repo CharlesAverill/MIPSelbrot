@@ -31,7 +31,7 @@ ZERO:			.float	0.0
 ONE:			.float	1.0
 TWO:			.float	2.0
 
-C_ZOOM_SCALE:	.float	0.4
+C_ZOOM_SCALE:	.float	1.1
 
 C_8:			.float	8.0
 C_64:			.float	64.0
@@ -46,7 +46,10 @@ RESOLUTION:		.float	32.0
 .eqv	RESOLUTION_INT	32
 
 # How many times to loop over a pixel while calculating its color, think of it like complex resolution
-N_MAX_ITER:		.float	25.0
+N_MAX_ITER:		.float	100.0
+
+# Flag to play sound when render pixel or not
+USE_MUSIC:		.word	0
 
 newline:		.asciiz "\n"
 
@@ -223,8 +226,8 @@ pick_color:
 	
 	# Pixel will be sepia
 	# Adjust K for an opposite hue
-	lwc1	$f25, TWO
-	sub.s	$f17, $f25, $f17		# K = 2 - K
+	lwc1	$f26, TWO
+	sub.s	$f17, $f26, $f17		# K = 2 - K
 	
 	# G and B both are composed of at least K^3, so compute that first
 	mul.s	$f21, $f17, $f17
@@ -282,6 +285,25 @@ draw_mandelbrot_pixel:
 	# At last, draw the pixel (x, y)
 	draw_pixel ($t0, $t1, $t4)
 	
+	# We will also play a noise with the MIDI out synchronous syscall if the user hits the m key
+	lw		$t8, USE_MUSIC
+	beq		$t8, 0, draw_mirror_pixel
+play_sound:
+	# Pitch = K * 128
+	mul.s	$f25, $f17, $f25
+	div.s	$f25, $f25, $f26
+	cvt.w.s	$f25, $f25
+	mfc1	$a0, $f25
+	# Duration = 20ms
+	li		$a1, 20
+	# Instrument = Piano 0
+	li		$a2, 0
+	# Volume = 127
+	li		$a3, 127
+	
+	li		$v0, 33
+	syscall
+draw_mirror_pixel:
 	# If Y_OFFSET is 0, the graph will be symmetric about Y = 0, so draw (x, RESOLUTION - y)
 	c.eq.s	$f28, $f30
 	bc1f	main_loop_increment
@@ -316,13 +338,13 @@ half_resolution:
 	# Do this by flipping the top left pixel between black and white every few frames
 	# t4 = timer
 	# t5 = pixel_is_white
-	li		$t4, 4000
+	li		$t4, 30000
 	li		$t5, 0
 input_loop:
 	# Increment timer
 	addi	$t4, $t4, 1
 	# Only flip the pixel if we've iterated 4000 frames
-	blt		$t4, 4000, skip_flip
+	blt		$t4, 30000, skip_flip
 	
 	# Reset timer
 	li		$t4, 0
@@ -332,7 +354,8 @@ input_loop:
 	# Draw the pixel, X and Y are always 0
 	li		$t0, 0x00FFFFFF
 	draw_pixel	($zero, $zero, $t0)
-	li		$t5, 0
+	li		$t5, 1
+	j skip_flip
 draw_black_pixel:
 	draw_pixel	($zero, $zero, $zero)
 	li		$t5, 0
@@ -344,6 +367,10 @@ skip_flip:
     lwc1	$f24, TWO
     lwc1	$f25, C_8
     lwc1	$f26, C_ZOOM_SCALE
+    # When zooming, update bounds and Y offset by zoom_update = (XMAX - XMIN) / (Zoom Scale * 2)
+	sub.s	$f23, $f2, $f1
+	div.s	$f23, $f23, $f26
+	div.s	$f23, $f23, $f24
     
     # process input
 	lw 	$s2, 0xffff0004
@@ -357,43 +384,57 @@ skip_flip:
 	beq	$s2, 122, zoom_in	# input z
 	beq	$s2, 120, zoom_out
 	# Color
-	beq	$s2, 111, hue_up
-	beq $s2, 108, hue_down
-	beq	$s2, 105, bright_up
-	beq	$s2, 107, bright_down
+	beq	$s2, 111, hue_up		# input o
+	beq $s2, 108, hue_down		# input l
+	beq	$s2, 105, bright_up		# input i
+	beq	$s2, 107, bright_down	# input k
+	# Sound
+	beq	$s2, 109, toggle_sound	# input m
 	# invalid input, ignore
 	j	input_loop
 	
 	# process valid input
 up:
-	# Y_OFFSET += 8
-	add.s	$f28, $f28, $f25
+	# Y_OFFSET += 8 * ZOOM_SCALE
+	mul.s	$f26, $f26, $f25
+	add.s	$f28, $f28, $f26
+	div.s	$f26, $f26, $f25
 	j save
 down:
-	# Y_OFFSET -= 8
-	sub.s	$f28, $f28, $f25
+	# Y_OFFSET -= 8 * ZOOM_SCALE
+	mul.s	$f26, $f26, $f25
+	sub.s	$f28, $f28, $f26
+	div.s	$f26, $f26, $f25
 	j save
 left:
-	# X_OFFSET -= 8
-	sub.s	$f27, $f27, $f25
+	# X_MIN -= ZOOM_SCALE
+	# X_MAX -= ZOOM_SCALE
+	sub.s	$f1, $f1, $f23
+	sub.s	$f2, $f2, $f23
 	j save	
 right:
-	# X_OFFSET += 8
-	add.s	$f27, $f27, $f25
+	# X_MIN += ZOOM_SCALE
+	# X_MAX += ZOOM_SCALE
+	add.s	$f1, $f1, $f23
+	add.s	$f2, $f2, $f23
 	j save
 zoom_in:
-	# X_MIN, X_MAX *= ZOOM_SCALE
-	mul.s	$f1, $f1, $f26
-	mul.s	$f2, $f2, $f26
-	# ZOOM_SCALE /= 2
-	div.s	$f26, $f26, $f24
+	# X_MIN += zoom_update
+	# X_MAX -= zoom_update
+	add.s	$f1, $f1, $f23
+	sub.s	$f2, $f2, $f23
+	# Y_OFFSET += zoom_update
+	# add.s	$f28, $f28, $f23
 	j save
 zoom_out:
-	# ZOOM_SCALE *= 2
-	mul.s	$f26, $f26, $f24
-	# X_MIN, X_MAX /= ZOOM_SCALE
-	div.s	$f1, $f1, $f26
-	div.s	$f2, $f2, $f26
+	# zoom_update *= 2
+	mul.s	$f23, $f23, $f24
+	# X_MIN -= zoom_update
+	# X_MAX += zoom_update
+	sub.s	$f1, $f1, $f23
+	add.s	$f2, $f2, $f23
+	# Y_OFFSET -= zoom_update
+	# sub.s	$f28, $f28, $f23
 	j save
 hue_up:
 	# HUE_COEFF *= 2
@@ -411,6 +452,10 @@ bright_up:
 	# BRIGHT_COEFF /= 2
 	div.s	$f9, $f9, $f24
 	j save
+toggle_sound:
+	lw		$t8, USE_MUSIC
+	not		$t8, $t8
+	j save
 save:
 	swc1	$f1, X_MIN
 	swc1	$f2, X_MAX
@@ -419,6 +464,7 @@ save:
 	swc1	$f26, C_ZOOM_SCALE
 	swc1	$f27, X_OFFSET
 	swc1	$f28, Y_OFFSET
+	sw		$t8, USE_MUSIC
 	j main
 exit:	
 	li	$v0, 10
