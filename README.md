@@ -3,7 +3,7 @@ An interactive mandelbrot fractal viewer written in MIPS
 
 ## Screenshots
 
-![Preview](preview.png)
+![1](media/screenshot1.png)
 
 ## Setup
 This program was designed to run in the Mars emulator.
@@ -33,6 +33,8 @@ Input is accepted between renders. When a render is complete, the top left pixel
 ## How does it work?
 
 ## Flowchart
+
+![Flowchart](media/flowchart.png)
 
 ## Known Issues
 - Zooming does not always put you where you wanted to go, you may end up stuck in a long render loop at the center of the fractal
