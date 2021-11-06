@@ -1,6 +1,8 @@
 # MIPSelbrot
 An interactive mandelbrot fractal viewer written in MIPS
 
+![Preview](preview.png)
+
 ## Setup
 This program was designed to run in the Mars emulator.
 
