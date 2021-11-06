@@ -5,6 +5,10 @@ An interactive mandelbrot fractal viewer written in MIPS
   <summary>Screenshots</summary>
   
   ![1](media/screenshot1.png)
+  ![2](media/screenshot2.png)
+  ![3](media/screenshot3.png)
+  ![4](media/screenshot4.png)
+  ![5](media/screenshot5.png)
 </details>
 
 ## Setup
