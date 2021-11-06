@@ -9,6 +9,7 @@ An interactive mandelbrot fractal viewer written in MIPS
   ![3](media/screenshot3.png)
   ![4](media/screenshot4.png)
   ![5](media/screenshot5.png)
+  ![Minibrot](media/minibrot.png)
 </details>
 
 ## Setup
