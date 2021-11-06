@@ -58,3 +58,4 @@ Certain optimizations are utilized, for example the Mandelbrot set is symmetric 
 - Zooming does not always put you where you wanted to go, you may end up stuck in a long render loop at the center of the fractal
 - Toggling the music on causes a slowdown of around 2 orders of magnitude. Asynchronous MIDI cannot be used due to a bug in Mars audio rendering
 - Too many hue or brightness shifts in either direction (more than 10) could be irreversible as the hue and brightness coefficients approach and eventually reach 0
+- Superzooms that you can find on YouTube are not possible in this plotter. They typically use BigDouble and other high-level abstractions to be able to plot deeper down into the fractal
