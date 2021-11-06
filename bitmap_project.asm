@@ -42,8 +42,8 @@ HUE_COEFF:		.float .9
 BRIGHT_COEFF:	.float	.9
 
 # Height, Width of screen in pixels for Mandelbrot computation
-RESOLUTION:		.float	32.0
-.eqv	RESOLUTION_INT	32
+RESOLUTION:		.float	64.0
+.eqv	RESOLUTION_INT	64
 
 # How many times to loop over a pixel while calculating its color, think of it like complex resolution
 N_MAX_ITER:		.float	100.0
